@@ -1,5 +1,4 @@
 import json
-from lib2to3.pgen2.tokenize import TokenError
 import logging
 import os
 import time
@@ -46,7 +45,6 @@ def send_message(bot, message):
     except telegram.TelegramError as error:
         error_send_message = f'Сообщение в Telegram не отправлено {error}'
         logger.error(error_send_message)
-        raise telegram.TelegramError(error_send_message)
 
 
 def get_api_answer(current_timestamp):
@@ -54,21 +52,21 @@ def get_api_answer(current_timestamp):
     params = {'from_date': current_timestamp}
     try:
         response = requests.get(url=ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != HTTPStatus.OK:
-            error_api_answer = ('Произошла ошибка во время запроса.'
-                                'Ответ API не получен')
-            logger.error(error_api_answer)
-            raise Exception(error_api_answer)
-        try:
-            return response.json()
-        except json.decoder.JSONDecodeError:
-            decoder_error = ('Произошла ошибка при переводе данных'
-                             ' в формат JSON')
-            return json.decoder.JSONDecodeError(decoder_error)
     except ConnectionError as error:
         message = f'Произошла ошибка во время запроса: {error}'
         logger.error(message)
         raise ConnectionError(message)
+    if response.status_code != HTTPStatus.OK:
+        error_api_answer = ('Произошла ошибка во время запроса.'
+                            'Ответ API не получен')
+        logger.error(error_api_answer)
+        raise Exception(error_api_answer)
+    try:
+        return response.json()
+    except json.decoder.JSONDecodeError:
+        decoder_error = ('Произошла ошибка при переводе данных'
+                         ' в формат JSON')
+        return json.decoder.JSONDecodeError(decoder_error)
 
 
 def check_response(response):
@@ -93,6 +91,10 @@ def check_response(response):
 
 def parse_status(homework):
     """Проверка изменения status домашней работы."""
+    if not isinstance(homework, dict):
+        error_parse_status_dict = 'Формат homework отличается от dict'
+        logger.error(error_parse_status_dict)
+        raise TypeError(error_parse_status_dict)
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_name is None:
@@ -114,33 +116,34 @@ def check_tokens():
     if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
         return True
     else:
-        for token in TOKEN_LIST:
-            if token is None:
-                logger.critical(f'Токен отсутствует {token}')
-                return False
+        if PRACTICUM_TOKEN is None:
+            logger.critical('Токен Практикума отсутствует')
+        if TELEGRAM_TOKEN is None:
+            logger.critical('Токен Telegram отсутствует')
+        if TELEGRAM_CHAT_ID is None:
+            logger.critical('Токен Telegram_chat отсутствует')
+        return False
 
 
 def main():
     """Основная логика работы бота."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time() - RETRY_TIME)
+    current_timestamp = int(time.time() - ASK_TIME)
     check = check_tokens()
     if not check:
-        return TokenError('Не все токены доступны')
+        return Exception('Не все токены доступны')
 
-    if check:
+    while True:
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             for homework in homeworks:
                 message = parse_status(homework)
                 send_message(bot, message)
-            current_timestamp = int(time.time())
             time.sleep(RETRY_TIME)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
-            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
