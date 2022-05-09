@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-TOKEN_LIST = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
 
 RETRY_TIME = 600
 ASK_TIME = 1814400
@@ -140,10 +139,12 @@ def main():
             for homework in homeworks:
                 message = parse_status(homework)
                 send_message(bot, message)
-            time.sleep(RETRY_TIME)
+            current_timestamp = response.get('current_date')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
+        finally:
+            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
